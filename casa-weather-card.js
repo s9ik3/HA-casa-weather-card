@@ -346,7 +346,6 @@ class CasaWeatherCard extends HTMLElement {
             <div class="cwc-avg-row" id="cwc-avg">Avg -- • ↑ -- • ↓ --</div>
           </div>
         </div>
-        <div class="cwc-condensa-row" id="cwc-condensa-row" style="display:none;"></div>
         <div class="cwc-sun-row">
           <div class="cwc-metric">
             <ha-icon class="cwc-icon-sunrise" icon="mdi:weather-sunset-up"></ha-icon>
@@ -365,10 +364,6 @@ class CasaWeatherCard extends HTMLElement {
             <span class="cwc-feels-value" id="cwc-feels">--°</span>
           </div>
         </div>
-        <div class="cwc-dew-row" id="cwc-dew-row" style="display:none;">
-          <ha-icon icon="mdi:water-thermometer-outline" style="--mdc-icon-size:17px;"></ha-icon>
-          <span>Punto di rugiada esterno <span class="cwc-dew-value" id="cwc-dew">--°</span></span>
-        </div>
         <div class="cwc-bottom">
           <div class="cwc-rooms-row" id="cwc-rooms-row"></div>
           <div class="cwc-rain-badge cwc-rain-assente" id="cwc-rain-badge">
@@ -376,6 +371,11 @@ class CasaWeatherCard extends HTMLElement {
             <span id="cwc-rain-text">-</span>
           </div>
         </div>
+        <div class="cwc-dew-row" id="cwc-dew-row" style="display:none;">
+          <ha-icon icon="mdi:water-thermometer-outline" style="--mdc-icon-size:17px;"></ha-icon>
+          <span>Punto di rugiada esterno <span class="cwc-dew-value" id="cwc-dew">--°</span></span>
+        </div>
+        <div class="cwc-condensa-row" id="cwc-condensa-row" style="display:none;"></div>
       </ha-card>
     `;
     this._clockEl = this.shadowRoot.querySelector("#cwc-clock");
