@@ -1,5 +1,7 @@
 # Casa Weather Card
 
+*[Read this in English](README.en.md)*
+
 Card Lovelace per Home Assistant che unisce in un unico blocco compatto:
 
 - Orologio digitale live + data in italiano
@@ -7,10 +9,25 @@ Card Lovelace per Home Assistant che unisce in un unico blocco compatto:
 - Temperatura attuale, colorata per fascia
 - Media / massima / minima temperatura calcolate dalle stanze configurate
 - Alba, tramonto (da `sun.sun`), umidità, temperatura percepita
+- Punto di rugiada esterno, colorato in base alla vicinanza con la temperatura attuale (allarme precoce di condensa)
 - Griglia 3 colonne di mini-termometri per stanza (temperatura + umidità)
+- Riepilogo rischio condensa a livello di casa: badge "Sì/No" con elenco delle stanze a rischio
+- Punto di rugiada per stanza, mostrato come chip colorati (verde/arancio/rosso in base al margine dalla temperatura)
 - Badge pioggia radar in tempo reale (pensato per un sensore RainViewer/pyscript, ma funziona con qualunque sensore testuale)
+- Editor visuale nativo, nessuna scrittura YAML manuale richiesta
 
-Zero dipendenze esterne: solo HTML/CSS/JS nativo, nessuna libreria di terze parti.
+## Dipendenze
+
+**Nessuna libreria esterna.** La card è un singolo Web Component scritto in HTML/CSS/JS nativo — nessun import, nessuna build step, nessuna dipendenza da HACS o npm.
+
+Usa solo componenti già presenti in ogni installazione Home Assistant (caricati automaticamente dal frontend, non serve installarli):
+- `ha-card`, `ha-icon` — rendering della card e delle icone MDI
+- `ha-entity-picker`, `ha-icon-button`, `mwc-button` — solo nell'editor visuale, per i selettori e i controlli di configurazione
+
+Richiede le seguenti entità già presenti nella tua istanza Home Assistant (non fornite dalla card):
+- Un'entità `weather.*` (qualsiasi integrazione: Met.no, OpenWeatherMap, ecc.)
+- `sun.sun` per alba/tramonto (integrazione Sun, attiva di default in HA)
+- I sensori che scegli di collegare tramite configurazione (temperatura, umidità, pioggia, punto di rugiada, rischio condensa, ecc.) — la card legge qualsiasi entità `sensor.*` tu indichi, non richiede un'integrazione specifica
 
 ## Installazione
 
@@ -73,18 +90,29 @@ Ogni voce di `rooms` supporta:
 
 | Chiave | Obbligatoria | Descrizione |
 |---|---|---|
-| `name` | Sì | Etichetta mostrata nel chip |
+| `name` | Sì | Etichetta mostrata nel chip. Usata anche come nome nel riepilogo punto di rugiada |
 | `entity` | Sì | Sensore temperatura (o temperatura+umidità in un'unica stringa, es. `"22.5°C 45%"` — i numeri vengono estratti nell'ordine in cui compaiono) |
-| `dew_point_entity` | No | Sensore punto di rugiada della stanza. Se assente, la riga extra del chip non compare |
-| `mold_risk_entity` | No | Sensore testuale di rischio condensa/muffa, con stato `OK` / `Attenzione` / `Critico` (colorato di conseguenza) |
+| `dew_point_entity` | No | Sensore punto di rugiada della stanza. Se assente, quella stanza non compare nel riepilogo punto di rugiada |
+| `mold_risk_entity` | No | Sensore testuale di rischio condensa/muffa, con stato `OK` / `Attenzione` / `Critico` (colorato di conseguenza nel badge riepilogativo) |
 
 `rooms` è interamente gestita da YAML o dall'editor visuale: aggiungere o togliere una stanza non richiede modifiche al codice della card. Media, massima e minima si ricalcolano automaticamente sulla lista fornita.
 
+## Punto di rugiada e rischio condensa
+
+Se configuri `dew_point_sensor` (esterno) e/o `dew_point_entity` per una o più stanze, la card mostra automaticamente il margine di sicurezza rispetto alla condensa, colorando il valore:
+
+- **Azzurro**: margine ≥ 3° tra temperatura e punto di rugiada — condizione sicura
+- **Arancione**: margine tra 1.5° e 3° — attenzione
+- **Rosso**: margine < 1.5° — rischio condensa imminente
+
+Se configuri anche `mold_risk_entity` per una o più stanze, appare un badge riepilogativo a piena larghezza ("Rischio condensa: Sì/No") con l'elenco delle stanze effettivamente a rischio.
+
 ## Editor visuale
 
-La card include un editor visuale nativo: nell'interfaccia Lovelace, dopo averla aggiunta, usa il pulsante "Modifica" per passare dalla modalità YAML alla modalità visuale, con selettori entità e gestione dinamica delle stanze (aggiungi/rimuovi righe).
+La card include un editor visuale nativo: nell'interfaccia Lovelace, dopo averla aggiunta, usa il pulsante "Modifica" per passare dalla modalità YAML alla modalità visuale, con selettori entità e gestione dinamica delle stanze (aggiungi/rimuovi righe, campi opzionali per punto di rugiada e rischio condensa).
 
 ## Note
 
 - Le fasce colore temperatura sono fisse nel codice (`<16° blu`, `16-21° verde acqua`, `21-25° verde`, `25-28° arancione`, `≥28° rosso`) — modificabili nella funzione `_tempColor`.
+- Le soglie colore del punto di rugiada sono fisse nel codice — modificabili nella funzione `_dewGapColor`.
 - L'icona meteo usa i codici condizione standard di Home Assistant (`sunny`, `partlycloudy`, `rainy`, ecc.).
