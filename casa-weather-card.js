@@ -151,9 +151,22 @@ class CasaWeatherCard extends HTMLElement {
             border-radius: 10px;
             white-space: nowrap;
           }
+          .cwc-dew-block {
+            width: 100%;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+          }
+          .cwc-dew-title {
+            font-size: 10px;
+            opacity: 0.6;
+            text-align: right;
+            margin-bottom: 5px;
+          }
           .cwc-dew-summary {
             display: flex;
             flex-wrap: wrap;
+            align-items: center;
             justify-content: flex-end;
             gap: 5px;
             width: 100%;
@@ -161,12 +174,15 @@ class CasaWeatherCard extends HTMLElement {
           .cwc-dew-chip-item {
             display: inline-flex;
             align-items: center;
-            gap: 3px;
+            gap: 4px;
             font-size: 10px;
             font-weight: 600;
             padding: 2px 8px;
             border-radius: 8px;
             white-space: nowrap;
+          }
+          .cwc-dew-chip-item ha-icon {
+            --mdc-icon-size: 12px;
           }
           .cwc-sun-row {
             display: flex;
@@ -630,9 +646,9 @@ class CasaWeatherCard extends HTMLElement {
           const dewChips = roomsWithDew
             .map((r) => {
               const gapColor = this._dewGapColor(r.temp, r.dew);
-              return `<span class="cwc-dew-chip-item" style="background:${gapColor}22;color:${gapColor};">🌫️ ${r.name} ${r.dew.toFixed(
+              return `<span class="cwc-dew-chip-item" style="background:${gapColor}22;color:${gapColor};"><ha-icon icon="mdi:water-thermometer-outline" style="--mdc-icon-size:12px;"></ha-icon>${r.name} <b>${r.dew.toFixed(
                 1
-              )}°</span>`;
+              )}°</b></span>`;
             })
             .join("");
           this._condensaRow.innerHTML = `
@@ -647,7 +663,14 @@ class CasaWeatherCard extends HTMLElement {
                   </div>`
                 : ""
             }
-            ${dewChips ? `<div class="cwc-dew-summary">${dewChips}</div>` : ""}
+            ${
+              dewChips
+                ? `<div class="cwc-dew-block">
+                    <div class="cwc-dew-title">Punto di rugiada</div>
+                    <div class="cwc-dew-summary">${dewChips}</div>
+                  </div>`
+                : ""
+            }
           `;
         }
       }
