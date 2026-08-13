@@ -224,13 +224,13 @@ class CasaWeatherCard extends HTMLElement {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 3px;
+            gap: 2px;
             font-size: 10px;
-            padding: 8px 4px;
+            padding: 6px 4px;
             border-radius: 10px;
             background: rgba(255,255,255,0.05);
             text-align: center;
-            min-height: 56px;
+            min-height: 40px;
           }
           .cwc-room-name-row {
             display: flex;
