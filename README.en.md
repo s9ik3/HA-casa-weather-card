@@ -29,6 +29,19 @@ It requires the following entities to already exist in your Home Assistant insta
 - `sun.sun` for sunrise/sunset (Sun integration, enabled by default in HA)
 - Whichever sensors you choose to wire up in the configuration (temperature, humidity, rain, dew point, mold risk, etc.) — the card reads any `sensor.*` entity you point it to, no specific integration required
 
+## Derived sensors (non-hardware)
+
+Some data used by the card — dew point, mold risk, rain radar — doesn't come from any physical device: it needs to be **calculated** in Home Assistant from sensors you already have (temperature/humidity) or from an external service (weather radar).
+
+This repository includes two ready-to-adapt example files, in the [`examples_virtual_sensors/`](examples_virtual_sensors/) folder:
+
+- **`sensors_dew_point_mold_risk.yaml`** — YAML template sensors that calculate dew point (Magnus formula) and mold/condensation risk from an existing temperature+humidity sensor pair. Also includes an example for outdoor feels-like temperature, useful if your weather integration doesn't already provide one.
+- **`rainviewer_rain_radar.py`** — [pyscript](https://github.com/custom-components/pyscript) script that reads the free public [RainViewer](https://www.rainviewer.com/) radar at your coordinates and publishes a sensor with the actually observed (not forecasted) rain intensity, useful for the `rain_sensor` field.
+
+Both files are commented with step-by-step instructions on how to adapt them (room names, coordinates, source entity IDs) and where to place them in your configuration.
+
+**Don't want to edit them by hand?** The folder also includes [`PROMPT_AI.en.md`](examples_virtual_sensors/PROMPT_AI.en.md): a ready-to-copy prompt for an AI assistant (Claude, ChatGPT, etc.) along with your real entity IDs — the AI generates the final, complete file with no placeholders to edit.
+
 ## Installation
 
 ### Via HACS (custom repository)
