@@ -642,7 +642,16 @@ customElements.define("casa-weather-card", CasaWeatherCard);
 
 class CasaWeatherCardEditor extends HTMLElement {
   setConfig(config) {
-    this._config = { rooms: [], ...config };
+    const incoming = { rooms: [], ...config };
+    // Se il config in arrivo è lo stesso che abbiamo appena emesso noi
+    // (round-trip da config-changed), non ri-renderizzare: evita di
+    // distruggere gli input e perdere il focus ad ogni carattere digitato.
+    if (this._suppressNextRender) {
+      this._suppressNextRender = false;
+      this._config = incoming;
+      return;
+    }
+    this._config = incoming;
     this._render();
   }
 
@@ -655,6 +664,7 @@ class CasaWeatherCardEditor extends HTMLElement {
   }
 
   _fireChanged() {
+    this._suppressNextRender = true;
     this.dispatchEvent(
       new CustomEvent("config-changed", {
         detail: { config: this._config },
