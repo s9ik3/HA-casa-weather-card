@@ -199,19 +199,20 @@ class CasaWeatherCard extends HTMLElement {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 2px;
+            gap: 3px;
             font-size: 10px;
-            padding: 6px 4px;
+            padding: 8px 4px;
             border-radius: 10px;
             background: rgba(255,255,255,0.05);
             text-align: center;
+            min-height: 56px;
           }
-          .cwc-room-chip > div:first-child {
+          .cwc-room-name-row {
             display: flex;
             align-items: center;
             gap: 4px;
           }
-          .cwc-room-chip > div:last-child {
+          .cwc-room-temp-row {
             display: flex;
             align-items: baseline;
             gap: 4px;
@@ -231,12 +232,23 @@ class CasaWeatherCard extends HTMLElement {
           }
           .cwc-room-extra {
             display: flex;
-            justify-content: space-between;
-            gap: 4px;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 3px;
+            width: 100%;
+          }
+          .cwc-dew-chip {
             font-size: 8px;
             opacity: 0.6;
-            margin-top: 2px;
-            width: 100%;
+            white-space: nowrap;
+          }
+          .cwc-mold-pill {
+            font-size: 8px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
           }
           .cwc-metric {
             display: flex;
@@ -402,7 +414,7 @@ class CasaWeatherCard extends HTMLElement {
 
   _parseRoomValue(entity) {
     const raw = this._hass.states[entity]?.state;
-    if (!raw) return { t: null, h: null };
+    if (!raw || raw === "unknown" || raw === "unavailable") return { t: null, h: null };
     const str = String(raw).replace(/,/g, ".");
     const nums = str.match(/-?\d+(?:\.\d+)?/g);
     if (!nums) return { t: null, h: null };
@@ -548,11 +560,11 @@ class CasaWeatherCard extends HTMLElement {
           .map(
             (r) => `
             <div class="cwc-room-chip">
-              <div>
+              <div class="cwc-room-name-row">
                 <div class="cwc-room-dot" style="background:${r.color};"></div>
                 <span>${r.name}</span>
               </div>
-              <div>
+              <div class="cwc-room-temp-row">
                 <span class="cwc-room-temp" style="color:${r.color};">${
                   r.temp != null ? r.temp.toFixed(1) + "°" : "N/A"
                 }</span>
@@ -561,10 +573,12 @@ class CasaWeatherCard extends HTMLElement {
               ${
                 r.dew != null || r.mold != null
                   ? `<div class="cwc-room-extra">
-                      ${r.dew != null ? `<span>🌫️ ${r.dew.toFixed(1)}°</span>` : ""}
+                      ${r.dew != null ? `<span class="cwc-dew-chip">🌫️ ${r.dew.toFixed(1)}°</span>` : ""}
                       ${
                         r.mold != null
-                          ? `<span style="color:${this._moldColor(r.mold)};font-weight:700;">${r.mold}</span>`
+                          ? `<span class="cwc-mold-pill" style="background:${this._moldColor(
+                              r.mold
+                            )}22;color:${this._moldColor(r.mold)};">${r.mold}</span>`
                           : ""
                       }
                     </div>`
@@ -666,21 +680,39 @@ class CasaWeatherCardEditor extends HTMLElement {
 
       const line = document.createElement("div");
       line.style.display = "grid";
-      line.style.gridTemplateColumns = "120px 1fr 36px";
+      line.style.gridTemplateColumns = "140px 1fr 36px";
       line.style.gap = "8px";
       line.style.alignItems = "center";
       line.style.width = "100%";
 
-      const nameInput = document.createElement("ha-textfield");
-      nameInput.label = "Nome";
+      const nameLabel = document.createElement("div");
+      nameLabel.textContent = "Nome";
+      nameLabel.style.fontSize = "12px";
+      nameLabel.style.opacity = "0.7";
+      nameLabel.style.marginBottom = "4px";
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.placeholder = "es. Cucina";
       nameInput.value = room.name || "";
       nameInput.style.width = "100%";
+      nameInput.style.boxSizing = "border-box";
+      nameInput.style.padding = "10px 8px";
+      nameInput.style.borderRadius = "4px";
+      nameInput.style.border = "1px solid var(--divider-color, #444)";
+      nameInput.style.background = "var(--card-background-color, transparent)";
+      nameInput.style.color = "var(--primary-text-color, inherit)";
+      nameInput.style.font = "inherit";
       nameInput.addEventListener("input", (ev) => {
         const rooms = [...this._config.rooms];
         rooms[index] = { ...rooms[index], name: ev.target.value };
         this._config = { ...this._config, rooms };
         this._fireChanged();
       });
+
+      const nameWrap = document.createElement("div");
+      nameWrap.appendChild(nameLabel);
+      nameWrap.appendChild(nameInput);
 
       const entityPicker = document.createElement("ha-entity-picker");
       entityPicker.label = "Sensore temperatura";
@@ -707,7 +739,7 @@ class CasaWeatherCardEditor extends HTMLElement {
         this._render();
       });
 
-      line.appendChild(nameInput);
+      line.appendChild(nameWrap);
       line.appendChild(entityPicker);
       line.appendChild(removeBtn);
       block.appendChild(line);
