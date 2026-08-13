@@ -29,6 +29,19 @@ Richiede le seguenti entità già presenti nella tua istanza Home Assistant (non
 - `sun.sun` per alba/tramonto (integrazione Sun, attiva di default in HA)
 - I sensori che scegli di collegare tramite configurazione (temperatura, umidità, pioggia, punto di rugiada, rischio condensa, ecc.) — la card legge qualsiasi entità `sensor.*` tu indichi, non richiede un'integrazione specifica
 
+## Sensori derivati (non hardware)
+
+Alcuni dati usati dalla card — punto di rugiada, rischio condensa, pioggia radar — non arrivano da nessun dispositivo fisico: vanno **calcolati** in Home Assistant a partire da sensori che già hai (temperatura/umidità) o da un servizio esterno (radar meteo).
+
+Questo repository include due file di esempio, pronti da adattare, nella cartella [`examples_virtual_sensors/`](examples_virtual_sensors/):
+
+- **`sensors_dew_point_mold_risk.yaml`** — Template sensor YAML che calcolano punto di rugiada (formula di Magnus) e rischio condensa/muffa a partire da una coppia di sensori temperatura+umidità esistenti. Include anche un esempio per la temperatura percepita esterna, utile se la tua integrazione meteo non la fornisce già.
+- **`rainviewer_rain_radar.py`** — Script [pyscript](https://github.com/custom-components/pyscript) che legge il radar pubblico gratuito [RainViewer](https://www.rainviewer.com/) alle tue coordinate e pubblica un sensore con l'intensità di pioggia realmente osservata (non prevista), utile per il campo `rain_sensor`.
+
+Entrambi i file sono commentati con istruzioni passo-passo su come adattarli (nomi stanze, coordinate, entity_id sorgente) e dove inserirli nella tua configurazione.
+
+**Non vuoi editarli a mano?** La cartella include anche [`PROMPT_AI.md`](examples_virtual_sensors/PROMPT_AI.md): un prompt pronto da copiare in un assistente AI (Claude, ChatGPT, ecc.) insieme ai tuoi entity_id reali — l'AI genera il file finale già completo, senza placeholder da modificare.
+
 ## Installazione
 
 ### Tramite HACS (repository personalizzato)
