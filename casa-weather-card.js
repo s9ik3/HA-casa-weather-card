@@ -132,6 +132,31 @@ class CasaWeatherCard extends HTMLElement {
             text-align: right;
             margin-top: 6px;
           }
+          .cwc-condensa-row {
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            margin-top: 8px;
+            width: 100%;
+          }
+          .cwc-mold-summary {
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+          }
+          .cwc-mold-pill {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 10px;
+            white-space: nowrap;
+          }
+          .cwc-dew-summary {
+            font-size: 9px;
+            opacity: 0.55;
+            text-align: right;
+            width: 100%;
+          }
           .cwc-sun-row {
             display: flex;
             justify-content: space-between;
@@ -230,26 +255,6 @@ class CasaWeatherCard extends HTMLElement {
             opacity: 0.55;
             font-size: 9px;
           }
-          .cwc-room-extra {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            margin-top: 3px;
-            width: 100%;
-          }
-          .cwc-dew-chip {
-            font-size: 8px;
-            opacity: 0.6;
-            white-space: nowrap;
-          }
-          .cwc-mold-pill {
-            font-size: 8px;
-            font-weight: 700;
-            padding: 1px 6px;
-            border-radius: 8px;
-            white-space: nowrap;
-          }
           .cwc-metric {
             display: flex;
             align-items: center;
@@ -305,6 +310,7 @@ class CasaWeatherCard extends HTMLElement {
             <div class="cwc-avg-row" id="cwc-avg">Avg -- • ↑ -- • ↓ --</div>
           </div>
         </div>
+        <div class="cwc-condensa-row" id="cwc-condensa-row" style="display:none;"></div>
         <div class="cwc-sun-row">
           <div class="cwc-metric">
             <ha-icon class="cwc-icon-sunrise" icon="mdi:weather-sunset-up"></ha-icon>
@@ -350,6 +356,7 @@ class CasaWeatherCard extends HTMLElement {
     this._dewEl = this.shadowRoot.querySelector("#cwc-dew");
     this._avgEl = this.shadowRoot.querySelector("#cwc-avg");
     this._roomsRow = this.shadowRoot.querySelector("#cwc-rooms-row");
+    this._condensaRow = this.shadowRoot.querySelector("#cwc-condensa-row");
     this._rainBadge = this.shadowRoot.querySelector("#cwc-rain-badge");
     this._rainText = this.shadowRoot.querySelector("#cwc-rain-text");
     this._tickInterval = setInterval(() => this._tick(), 1000);
@@ -570,24 +577,42 @@ class CasaWeatherCard extends HTMLElement {
                 }</span>
                 ${r.hum != null ? `<span class="cwc-room-hum">💧 ${r.hum.toFixed(0)}%</span>` : ""}
               </div>
-              ${
-                r.dew != null || r.mold != null
-                  ? `<div class="cwc-room-extra">
-                      ${r.dew != null ? `<span class="cwc-dew-chip">🌫️ ${r.dew.toFixed(1)}°</span>` : ""}
-                      ${
-                        r.mold != null
-                          ? `<span class="cwc-mold-pill" style="background:${this._moldColor(
-                              r.mold
-                            )}22;color:${this._moldColor(r.mold)};">${r.mold}</span>`
-                          : ""
-                      }
-                    </div>`
-                  : ""
-              }
             </div>
           `
           )
           .join("");
+      }
+
+      // Riepilogo condensa: badge Sì/No + elenco stanze a rischio + punti di rugiada
+      if (this._condensaRow) {
+        const roomsWithMold = rooms.filter((r) => r.mold != null);
+        const atRisk = roomsWithMold.filter((r) => r.mold !== "OK").map((r) => r.name);
+        const hasRisk = atRisk.length > 0;
+
+        const dewList = rooms
+          .filter((r) => r.dew != null)
+          .map((r) => `${r.name} ${r.dew.toFixed(1)}°`)
+          .join(" • ");
+
+        if (roomsWithMold.length === 0 && !dewList) {
+          this._condensaRow.style.display = "none";
+        } else {
+          this._condensaRow.style.display = "flex";
+          this._condensaRow.innerHTML = `
+            ${
+              roomsWithMold.length > 0
+                ? `<div class="cwc-mold-summary">
+                    <span class="cwc-mold-pill" style="background:${
+                      hasRisk ? "#e5393522" : "#43a04722"
+                    };color:${hasRisk ? "#e53935" : "#43a047"};">
+                      Rischio condensa: ${hasRisk ? "Sì — " + atRisk.join(", ") : "No"}
+                    </span>
+                  </div>`
+                : ""
+            }
+            ${dewList ? `<div class="cwc-dew-summary">🌫️ ${dewList}</div>` : ""}
+          `;
+        }
       }
     }
   }
@@ -746,7 +771,7 @@ class CasaWeatherCardEditor extends HTMLElement {
 
       const extraLine = document.createElement("div");
       extraLine.style.display = "grid";
-      extraLine.style.gridTemplateColumns = "1fr 1fr";
+      extraLine.style.gridTemplateColumns = "1fr";
       extraLine.style.gap = "8px";
       extraLine.style.marginTop = "8px";
       extraLine.style.width = "100%";
