@@ -1,0 +1,112 @@
+# sensors_dew_point_mold_risk.yaml
+# ==================================================
+# Sensori DERIVATI (calcolati via template), non collegati
+# direttamente a nessun dispositivo hardware.
+#
+# Calcolano punto di rugiada e rischio condensa/muffa a
+# partire da una coppia di sensori temperatura + umidità
+# già esistenti (fisici, es. Zigbee/BLE/ESPHome).
+#
+# Formula punto di rugiada: approssimazione di Magnus,
+# accurata entro ±0.1°C per umidità tra 1-100% e
+# temperature tra -45°C e 60°C.
+#
+# COME USARE QUESTO FILE:
+# 1. Duplica il blocco "ESEMPIO STANZA" per ogni stanza che
+#    vuoi monitorare, rinominando id/nomi ed entity_id dei
+#    sensori sorgente (temperatura/umidità già esistenti).
+# 2. Includi questo file nella tua configuration.yaml, es.:
+#      template: !include sensors_dew_point_mold_risk.yaml
+#    oppure incollane il contenuto in un template.yaml già
+#    esistente, sotto una chiave "- sensor:" o "- trigger: ... sensor:".
+# 3. Usa gli entity_id risultanti (sensor.NOMESTANZA_dew_point,
+#    sensor.NOMESTANZA_mold_risk) nella configurazione della
+#    Casa Weather Card, nei campi dew_point_entity e
+#    mold_risk_entity di ogni voce "rooms".
+# ==================================================
+
+- sensor:
+    # ============ ESEMPIO STANZA (duplica per ogni stanza) ============
+    # Sostituisci "living_room" con un nome breve univoco (es. kitchen,
+    # bedroom) e gli entity_id dei sensori sorgente con i tuoi reali.
+
+    - name: "Living Room Dew Point"
+      unique_id: living_room_dew_point
+      icon: mdi:water-thermometer-outline
+      unit_of_measurement: "°C"
+      state_class: measurement
+      state: >-
+        {% set t = states('sensor.living_room_temperature') | float(none) %}
+        {% set h = states('sensor.living_room_humidity') | float(none) %}
+        {% if t is none or h is none or h <= 0 %}
+          {{ none }}
+        {% else %}
+          {% set b = 17.62 %}
+          {% set c = 243.12 %}
+          {% set gamma = (b * t / (c + t)) + (h / 100) | log %}
+          {{ ((c * gamma) / (b - gamma)) | round(1) }}
+        {% endif %}
+
+    - name: "Living Room Mold Risk"
+      unique_id: living_room_mold_risk
+      icon: mdi:mold
+      state: >-
+        {% set t = states('sensor.living_room_temperature') | float(none) %}
+        {% set dew = states('sensor.living_room_dew_point') | float(none) %}
+        {% if t is none or dew is none %}
+          Sconosciuto
+        {% else %}
+          {% set gap = t - dew %}
+          {% if gap < 1.5 %}
+            Critico
+          {% elif gap < 3 %}
+            Attenzione
+          {% else %}
+            OK
+          {% endif %}
+        {% endif %}
+
+    # ============ Duplica da qui in giù per altre stanze ============
+    # - name: "Kitchen Dew Point"
+    #   unique_id: kitchen_dew_point
+    #   ... (stessa formula, sostituendo sensor.living_room_* con sensor.kitchen_*)
+
+    # ============ Opzionale: punto di rugiada ESTERNO ============
+    # Stessa formula, applicata a un sensore temperatura/umidità esterno.
+
+    - name: "Outdoor Dew Point"
+      unique_id: outdoor_dew_point
+      icon: mdi:water-thermometer-outline
+      unit_of_measurement: "°C"
+      state_class: measurement
+      state: >-
+        {% set t = states('sensor.outdoor_temperature') | float(none) %}
+        {% set h = states('sensor.outdoor_humidity') | float(none) %}
+        {% if t is none or h is none or h <= 0 %}
+          {{ none }}
+        {% else %}
+          {% set b = 17.62 %}
+          {% set c = 243.12 %}
+          {% set gamma = (b * t / (c + t)) + (h / 100) | log %}
+          {{ ((c * gamma) / (b - gamma)) | round(1) }}
+        {% endif %}
+
+    # ============ Opzionale: temperatura percepita ESTERNA ============
+    # Approssimazione basata su temperatura + umidità (non sostituisce
+    # un vero indice heat-index/wind-chill, ma è un compromesso ragionevole
+    # se la tua integrazione meteo non fornisce già apparent_temperature).
+
+    - name: "Outdoor Feels Like"
+      unique_id: outdoor_feels_like
+      icon: mdi:thermometer-lines
+      unit_of_measurement: "°C"
+      state_class: measurement
+      state: >-
+        {% set t = states('sensor.outdoor_temperature') | float(none) %}
+        {% set h = states('sensor.outdoor_humidity') | float(none) %}
+        {% if t is none or h is none %}
+          {{ none }}
+        {% else %}
+          {% set hi = t + 0.33 * (h / 100 * 6.105 * (17.27 * t / (237.7 + t)) | exp) - 4 %}
+          {{ hi | round(1) }}
+        {% endif %}
