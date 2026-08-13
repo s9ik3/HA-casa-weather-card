@@ -152,10 +152,21 @@ class CasaWeatherCard extends HTMLElement {
             white-space: nowrap;
           }
           .cwc-dew-summary {
-            font-size: 9px;
-            opacity: 0.55;
-            text-align: right;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 5px;
             width: 100%;
+          }
+          .cwc-dew-chip-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 8px;
+            white-space: nowrap;
           }
           .cwc-sun-row {
             display: flex;
@@ -190,10 +201,19 @@ class CasaWeatherCard extends HTMLElement {
           .cwc-dew-row {
             display: flex;
             align-items: center;
-            gap: 5px;
-            font-size: 10px;
-            opacity: 0.6;
-            margin-top: 6px;
+            gap: 6px;
+            font-size: 11px;
+            opacity: 0.9;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+          }
+          .cwc-dew-row ha-icon {
+            color: #42a5f5;
+          }
+          .cwc-dew-value {
+            font-weight: 800;
+            color: #6ab5f5;
           }
           .cwc-temp {
             font-size: 15px;
@@ -330,8 +350,8 @@ class CasaWeatherCard extends HTMLElement {
           </div>
         </div>
         <div class="cwc-dew-row" id="cwc-dew-row" style="display:none;">
-          <ha-icon icon="mdi:water-thermometer-outline" style="--mdc-icon-size:14px;opacity:0.6;"></ha-icon>
-          <span>Punto di rugiada esterno <b id="cwc-dew">--°</b></span>
+          <ha-icon icon="mdi:water-thermometer-outline" style="--mdc-icon-size:17px;"></ha-icon>
+          <span>Punto di rugiada esterno <span class="cwc-dew-value" id="cwc-dew">--°</span></span>
         </div>
         <div class="cwc-bottom">
           <div class="cwc-rooms-row" id="cwc-rooms-row"></div>
@@ -419,6 +439,15 @@ class CasaWeatherCard extends HTMLElement {
     return "var(--disabled-text-color, #888)";
   }
 
+  _dewGapColor(temp, dew) {
+    // Soglie: >=3° sicuro (azzurro), 1.5-3° attenzione (arancio), <1.5° critico (rosso)
+    if (temp == null || dew == null) return "#6ab5f5";
+    const gap = temp - dew;
+    if (gap < 1.5) return "#e53935";
+    if (gap < 3) return "#fb8c00";
+    return "#6ab5f5";
+  }
+
   _parseRoomValue(entity) {
     const raw = this._hass.states[entity]?.state;
     if (!raw || raw === "unknown" || raw === "unavailable") return { t: null, h: null };
@@ -498,7 +527,10 @@ class CasaWeatherCard extends HTMLElement {
       if (this._config.dew_point_sensor && this._dewRow) {
         const dew = this._readNumericSensor(this._config.dew_point_sensor);
         this._dewRow.style.display = dew !== null ? "flex" : "none";
-        if (dew !== null) this._dewEl.textContent = `${dew.toFixed(1)}°`;
+        if (dew !== null) {
+          this._dewEl.textContent = `${dew.toFixed(1)}°`;
+          this._dewEl.style.color = this._dewGapColor(temp, dew);
+        }
       }
     }
 
@@ -589,15 +621,20 @@ class CasaWeatherCard extends HTMLElement {
         const atRisk = roomsWithMold.filter((r) => r.mold !== "OK").map((r) => r.name);
         const hasRisk = atRisk.length > 0;
 
-        const dewList = rooms
-          .filter((r) => r.dew != null)
-          .map((r) => `${r.name} ${r.dew.toFixed(1)}°`)
-          .join(" • ");
+        const roomsWithDew = rooms.filter((r) => r.dew != null);
 
-        if (roomsWithMold.length === 0 && !dewList) {
+        if (roomsWithMold.length === 0 && roomsWithDew.length === 0) {
           this._condensaRow.style.display = "none";
         } else {
           this._condensaRow.style.display = "flex";
+          const dewChips = roomsWithDew
+            .map((r) => {
+              const gapColor = this._dewGapColor(r.temp, r.dew);
+              return `<span class="cwc-dew-chip-item" style="background:${gapColor}22;color:${gapColor};">🌫️ ${r.name} ${r.dew.toFixed(
+                1
+              )}°</span>`;
+            })
+            .join("");
           this._condensaRow.innerHTML = `
             ${
               roomsWithMold.length > 0
@@ -610,7 +647,7 @@ class CasaWeatherCard extends HTMLElement {
                   </div>`
                 : ""
             }
-            ${dewList ? `<div class="cwc-dew-summary">🌫️ ${dewList}</div>` : ""}
+            ${dewChips ? `<div class="cwc-dew-summary">${dewChips}</div>` : ""}
           `;
         }
       }
