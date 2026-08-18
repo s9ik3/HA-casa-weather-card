@@ -485,6 +485,21 @@ class CasaWeatherCard extends HTMLElement {
     return "#e53935";
   }
 
+  _applyOrder(list, orderKey) {
+    const order = (this._config && this._config[orderKey]) || [];
+    if (!order.length) return list;
+    const byName = new Map(list.map((l) => [l.name, l]));
+    const ordered = [];
+    for (const name of order) {
+      if (byName.has(name)) {
+        ordered.push(byName.get(name));
+        byName.delete(name);
+      }
+    }
+    for (const remaining of byName.values()) ordered.push(remaining);
+    return ordered;
+  }
+
   _conditionLabel(condition) {
     const map = {
       "clear-night": "sereno",
@@ -590,12 +605,13 @@ class CasaWeatherCard extends HTMLElement {
 
     // Media temperature stanze + mini-termometri (stessa logica del button-card Temperature)
     if (this._config.rooms && Array.isArray(this._config.rooms)) {
-      const rooms = this._config.rooms.map((r) => {
+      let rooms = this._config.rooms.map((r) => {
         const d = this._parseRoomValue(r.entity);
         const dew = r.dew_point_entity ? this._readNumericSensor(r.dew_point_entity) : null;
         const mold = r.mold_risk_entity ? this._readTextSensor(r.mold_risk_entity) : null;
         return { name: r.name, temp: d.t, hum: d.h, dew, mold, color: this._tempColor(d.t) };
       });
+      rooms = this._applyOrder(rooms, "room_order");
       const temps = rooms.map((r) => r.temp).filter((v) => v != null);
       const avg = temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : null;
       const max = temps.length ? Math.max(...temps) : null;
@@ -702,7 +718,7 @@ customElements.define("casa-weather-card", CasaWeatherCard);
 
 class CasaWeatherCardEditor extends HTMLElement {
   setConfig(config) {
-    const incoming = { rooms: [], ...config };
+    const incoming = { rooms: [], room_order: [], ...config };
     // Se il config in arrivo è lo stesso che abbiamo appena emesso noi
     // (round-trip da config-changed), non ri-renderizzare: evita di
     // distruggere gli input e perdere il focus ad ogni carattere digitato.
@@ -756,7 +772,51 @@ class CasaWeatherCardEditor extends HTMLElement {
     return row;
   }
 
+  _nativeInput(value, placeholder) {
+    const input = document.createElement("input");
+    input.type = "text";
+    if (placeholder) input.placeholder = placeholder;
+    input.value = value || "";
+    input.style.width = "100%";
+    input.style.boxSizing = "border-box";
+    input.style.padding = "10px 8px";
+    input.style.borderRadius = "4px";
+    input.style.border = "1px solid var(--divider-color, #444)";
+    input.style.background = "var(--card-background-color, transparent)";
+    input.style.color = "var(--primary-text-color, inherit)";
+    input.style.font = "inherit";
+    return input;
+  }
+
+  _nativeButton(text) {
+    const btn = document.createElement("button");
+    btn.textContent = text;
+    btn.style.padding = "8px 14px";
+    btn.style.borderRadius = "6px";
+    btn.style.border = "1px solid var(--divider-color, #444)";
+    btn.style.background = "var(--card-background-color, transparent)";
+    btn.style.color = "var(--primary-text-color, inherit)";
+    btn.style.font = "inherit";
+    btn.style.cursor = "pointer";
+    return btn;
+  }
+
+  // Salva l'ordine finale (array di nomi) letto dal DOM dopo un drag,
+  // tramite config-changed. Chiave parametrica per riutilizzo futuro
+  // su altre liste riordinabili.
+  _saveOrder(orderKey, names) {
+    this._config = { ...this._config, [orderKey]: names };
+    this._fireChanged();
+  }
+
   _roomsSection() {
+    // Se stiamo modificando una stanza specifica, mostra SOLO la
+    // schermata dedicata (indice come chiave: il nome può essere
+    // ambiguo/vuoto mentre l'utente sta ancora digitando).
+    if (this._renameTarget && this._renameTarget.type === "room") {
+      return this._roomEditScreen(this._renameTarget.index);
+    }
+
     const wrap = document.createElement("div");
     wrap.style.marginTop = "16px";
 
@@ -766,67 +826,101 @@ class CasaWeatherCardEditor extends HTMLElement {
     title.style.marginBottom = "8px";
     wrap.appendChild(title);
 
+    const list = document.createElement("div");
+    list.style.display = "flex";
+    list.style.flexDirection = "column";
+    list.style.gap = "6px";
+
+    let dragFromIndex = null;
+
     this._config.rooms.forEach((room, index) => {
-      const block = document.createElement("div");
-      block.style.border = "1px solid var(--divider-color, rgba(127,127,127,0.2))";
-      block.style.borderRadius = "8px";
-      block.style.padding = "8px";
-      block.style.marginBottom = "10px";
+      const row = document.createElement("div");
+      row.dataset.index = String(index);
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "28px 1fr 36px 36px";
+      row.style.gap = "8px";
+      row.style.alignItems = "center";
+      row.style.border = "1px solid var(--divider-color, rgba(127,127,127,0.2))";
+      row.style.borderRadius = "8px";
+      row.style.padding = "8px";
 
-      const line = document.createElement("div");
-      line.style.display = "grid";
-      line.style.gridTemplateColumns = "140px 1fr 36px";
-      line.style.gap = "8px";
-      line.style.alignItems = "center";
-      line.style.width = "100%";
+      // Maniglia drag: SOLO questa è draggable, non l'intera riga,
+      // per evitare trascinamenti accidentali toccando il resto della riga.
+      const handle = document.createElement("span");
+      handle.textContent = "☰";
+      handle.title = "Trascina per riordinare";
+      handle.draggable = true;
+      handle.style.cursor = "grab";
+      handle.style.textAlign = "center";
+      handle.style.opacity = "0.7";
+      handle.style.userSelect = "none";
 
-      const nameLabel = document.createElement("div");
-      nameLabel.textContent = "Nome";
-      nameLabel.style.fontSize = "12px";
-      nameLabel.style.opacity = "0.7";
-      nameLabel.style.marginBottom = "4px";
-
-      const nameInput = document.createElement("input");
-      nameInput.type = "text";
-      nameInput.placeholder = "es. Cucina";
-      nameInput.value = room.name || "";
-      nameInput.style.width = "100%";
-      nameInput.style.boxSizing = "border-box";
-      nameInput.style.padding = "10px 8px";
-      nameInput.style.borderRadius = "4px";
-      nameInput.style.border = "1px solid var(--divider-color, #444)";
-      nameInput.style.background = "var(--card-background-color, transparent)";
-      nameInput.style.color = "var(--primary-text-color, inherit)";
-      nameInput.style.font = "inherit";
-      nameInput.addEventListener("input", (ev) => {
-        const rooms = [...this._config.rooms];
-        rooms[index] = { ...rooms[index], name: ev.target.value };
-        this._config = { ...this._config, rooms };
-        this._fireChanged();
+      handle.addEventListener("dragstart", (ev) => {
+        dragFromIndex = index;
+        row.style.opacity = "0.4";
+        ev.dataTransfer.effectAllowed = "move";
+      });
+      handle.addEventListener("dragend", () => {
+        row.style.opacity = "1";
+        dragFromIndex = null;
+        // Legge l'ordine finale dal DOM e lo salva come lista di nomi.
+        const names = Array.from(list.children).map(
+          (child) => this._config.rooms[Number(child.dataset.index)].name
+        );
+        // Riordina anche l'array reale rooms secondo il DOM, così gli
+        // indici restano coerenti con quanto visualizzato.
+        const newRooms = Array.from(list.children).map(
+          (child) => this._config.rooms[Number(child.dataset.index)]
+        );
+        this._config = { ...this._config, rooms: newRooms };
+        this._saveOrder("room_order", names);
+        this._render();
       });
 
-      const nameWrap = document.createElement("div");
-      nameWrap.appendChild(nameLabel);
-      nameWrap.appendChild(nameInput);
-
-      const entityPicker = document.createElement("ha-entity-picker");
-      entityPicker.label = "Sensore temperatura";
-      entityPicker.value = room.entity || "";
-      entityPicker.includeDomains = ["sensor"];
-      if (this._hass) entityPicker.hass = this._hass;
-      entityPicker.style.width = "100%";
-      entityPicker.addEventListener("value-changed", (ev) => {
-        ev.stopPropagation();
-        const rooms = [...this._config.rooms];
-        rooms[index] = { ...rooms[index], entity: ev.detail.value };
-        this._config = { ...this._config, rooms };
-        this._fireChanged();
+      row.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        if (dragFromIndex === null) return;
+        const target = row;
+        const targetIndex = Number(target.dataset.index);
+        if (targetIndex === dragFromIndex) return;
+        const children = Array.from(list.children);
+        const fromEl = children[dragFromIndex];
+        if (!fromEl) return;
+        if (targetIndex < dragFromIndex) {
+          list.insertBefore(fromEl, target);
+        } else {
+          list.insertBefore(fromEl, target.nextSibling);
+        }
+        dragFromIndex = targetIndex;
       });
 
-      const removeBtn = document.createElement("ha-icon-button");
-      removeBtn.path =
-        "M19,13H5V11H19V13Z"; // icona "minus" (mdi:minus, path inline per evitare dipendenze)
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = room.name || "(senza nome)";
+      nameSpan.style.overflow = "hidden";
+      nameSpan.style.textOverflow = "ellipsis";
+      nameSpan.style.whiteSpace = "nowrap";
+
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "✎";
+      editBtn.title = "Modifica stanza";
+      editBtn.style.border = "none";
+      editBtn.style.background = "transparent";
+      editBtn.style.color = "var(--primary-text-color, inherit)";
+      editBtn.style.cursor = "pointer";
+      editBtn.style.fontSize = "16px";
+      editBtn.addEventListener("click", () => {
+        this._renameTarget = { type: "room", index };
+        this._render();
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "✕";
       removeBtn.title = "Rimuovi stanza";
+      removeBtn.style.border = "none";
+      removeBtn.style.background = "transparent";
+      removeBtn.style.color = "var(--primary-text-color, inherit)";
+      removeBtn.style.cursor = "pointer";
+      removeBtn.style.fontSize = "16px";
       removeBtn.addEventListener("click", () => {
         const rooms = this._config.rooms.filter((_, i) => i !== index);
         this._config = { ...this._config, rooms };
@@ -834,64 +928,141 @@ class CasaWeatherCardEditor extends HTMLElement {
         this._render();
       });
 
-      line.appendChild(nameWrap);
-      line.appendChild(entityPicker);
-      line.appendChild(removeBtn);
-      block.appendChild(line);
-
-      const extraLine = document.createElement("div");
-      extraLine.style.display = "grid";
-      extraLine.style.gridTemplateColumns = "1fr";
-      extraLine.style.gap = "8px";
-      extraLine.style.marginTop = "8px";
-      extraLine.style.width = "100%";
-
-      const dewPicker = document.createElement("ha-entity-picker");
-      dewPicker.label = "Sensore punto di rugiada (opz.)";
-      dewPicker.value = room.dew_point_entity || "";
-      dewPicker.includeDomains = ["sensor"];
-      if (this._hass) dewPicker.hass = this._hass;
-      dewPicker.style.width = "100%";
-      dewPicker.addEventListener("value-changed", (ev) => {
-        ev.stopPropagation();
-        const rooms = [...this._config.rooms];
-        rooms[index] = { ...rooms[index], dew_point_entity: ev.detail.value };
-        this._config = { ...this._config, rooms };
-        this._fireChanged();
-      });
-
-      const moldPicker = document.createElement("ha-entity-picker");
-      moldPicker.label = "Sensore rischio condensa (opz.)";
-      moldPicker.value = room.mold_risk_entity || "";
-      moldPicker.includeDomains = ["sensor"];
-      if (this._hass) moldPicker.hass = this._hass;
-      moldPicker.style.width = "100%";
-      moldPicker.addEventListener("value-changed", (ev) => {
-        ev.stopPropagation();
-        const rooms = [...this._config.rooms];
-        rooms[index] = { ...rooms[index], mold_risk_entity: ev.detail.value };
-        this._config = { ...this._config, rooms };
-        this._fireChanged();
-      });
-
-      extraLine.appendChild(dewPicker);
-      extraLine.appendChild(moldPicker);
-      block.appendChild(extraLine);
-
-      wrap.appendChild(block);
+      row.appendChild(handle);
+      row.appendChild(nameSpan);
+      row.appendChild(editBtn);
+      row.appendChild(removeBtn);
+      list.appendChild(row);
     });
 
-    const addBtn = document.createElement("mwc-button");
-    addBtn.textContent = "+ Aggiungi stanza";
+    wrap.appendChild(list);
+
+    const addBtn = this._nativeButton("+ Aggiungi stanza");
+    addBtn.style.marginTop = "10px";
     addBtn.addEventListener("click", () => {
       const rooms = [...this._config.rooms, { name: "", entity: "" }];
       this._config = { ...this._config, rooms };
       this._fireChanged();
       this._render();
+      // Apre subito la schermata di modifica per la nuova stanza.
+      this._renameTarget = { type: "room", index: rooms.length - 1 };
+      this._render();
     });
     wrap.appendChild(addBtn);
 
     return wrap;
+  }
+
+  // Seconda schermata: modifica di UNA singola stanza (identificata per
+  // indice, non per nome, per evitare ambiguità con nomi vuoti/duplicati).
+  _roomEditScreen(index) {
+    const room = this._config.rooms[index];
+    const screen = document.createElement("div");
+    screen.style.marginTop = "16px";
+
+    if (!room) {
+      // La stanza non esiste più (es. rimossa altrove): torna alla lista.
+      this._renameTarget = null;
+      return this._roomsSection();
+    }
+
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.gap = "8px";
+    header.style.marginBottom = "14px";
+
+    const backBtn = this._nativeButton("← Indietro");
+    backBtn.addEventListener("click", () => {
+      this._renameTarget = null;
+      this._render();
+    });
+
+    const title = document.createElement("div");
+    title.textContent = `Modifica stanza`;
+    title.style.fontWeight = "600";
+
+    header.appendChild(backBtn);
+    header.appendChild(title);
+    screen.appendChild(header);
+
+    const setRoomField = (key, value) => {
+      const rooms = [...this._config.rooms];
+      rooms[index] = { ...rooms[index], [key]: value };
+      this._config = { ...this._config, rooms };
+    };
+
+    const nameLabel = document.createElement("div");
+    nameLabel.textContent = "Nome";
+    nameLabel.style.fontSize = "12px";
+    nameLabel.style.opacity = "0.7";
+    nameLabel.style.margin = "10px 0 4px";
+    screen.appendChild(nameLabel);
+
+    const nameInput = this._nativeInput(room.name, "es. Cucina");
+    nameInput.addEventListener("input", (ev) => {
+      setRoomField("name", ev.target.value);
+      this._fireChanged();
+    });
+    screen.appendChild(nameInput);
+
+    const entityWrap = document.createElement("div");
+    entityWrap.style.marginTop = "12px";
+    const entityPicker = document.createElement("ha-entity-picker");
+    entityPicker.label = "Sensore temperatura";
+    entityPicker.value = room.entity || "";
+    entityPicker.includeDomains = ["sensor"];
+    if (this._hass) entityPicker.hass = this._hass;
+    entityPicker.style.width = "100%";
+    entityPicker.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      setRoomField("entity", ev.detail.value);
+      this._fireChanged();
+    });
+    entityWrap.appendChild(entityPicker);
+    screen.appendChild(entityWrap);
+
+    const dewWrap = document.createElement("div");
+    dewWrap.style.marginTop = "12px";
+    const dewPicker = document.createElement("ha-entity-picker");
+    dewPicker.label = "Sensore punto di rugiada (opz.)";
+    dewPicker.value = room.dew_point_entity || "";
+    dewPicker.includeDomains = ["sensor"];
+    if (this._hass) dewPicker.hass = this._hass;
+    dewPicker.style.width = "100%";
+    dewPicker.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      setRoomField("dew_point_entity", ev.detail.value);
+      this._fireChanged();
+    });
+    dewWrap.appendChild(dewPicker);
+    screen.appendChild(dewWrap);
+
+    const moldWrap = document.createElement("div");
+    moldWrap.style.marginTop = "12px";
+    const moldPicker = document.createElement("ha-entity-picker");
+    moldPicker.label = "Sensore rischio condensa (opz.)";
+    moldPicker.value = room.mold_risk_entity || "";
+    moldPicker.includeDomains = ["sensor"];
+    if (this._hass) moldPicker.hass = this._hass;
+    moldPicker.style.width = "100%";
+    moldPicker.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      setRoomField("mold_risk_entity", ev.detail.value);
+      this._fireChanged();
+    });
+    moldWrap.appendChild(moldPicker);
+    screen.appendChild(moldWrap);
+
+    const saveBtn = this._nativeButton("Salva");
+    saveBtn.style.marginTop = "16px";
+    saveBtn.addEventListener("click", () => {
+      this._renameTarget = null;
+      this._render();
+    });
+    screen.appendChild(saveBtn);
+
+    return screen;
   }
 
   _render() {
@@ -903,6 +1074,19 @@ class CasaWeatherCardEditor extends HTMLElement {
     container.style.padding = "8px";
     container.style.width = "100%";
     container.style.boxSizing = "border-box";
+
+    // Se è aperta la schermata di modifica di una stanza, mostra solo
+    // quella: niente altri campi dell'editor visibili contemporaneamente.
+    if (this._renameTarget && this._renameTarget.type === "room") {
+      container.appendChild(this._roomsSection());
+      this.appendChild(container);
+      if (this._hass) {
+        this.querySelectorAll("ha-entity-picker").forEach((el) => {
+          el.hass = this._hass;
+        });
+      }
+      return;
+    }
 
     container.appendChild(this._entityRow("Entità meteo (obbligatoria)", "entity", "weather"));
     container.appendChild(this._entityRow("Sensore temperatura esterna", "temperature_sensor"));
