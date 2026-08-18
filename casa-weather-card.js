@@ -143,12 +143,13 @@ class CasaWeatherCard extends HTMLElement {
             display: flex;
             justify-content: flex-end;
             width: 100%;
+            margin-top: 4px;
           }
           .cwc-mold-pill {
             font-size: 10px;
             font-weight: 700;
             padding: 3px 10px;
-            border-radius: 10px;
+            border-radius: 0;
             white-space: nowrap;
           }
           .cwc-dew-block {
@@ -344,6 +345,7 @@ class CasaWeatherCard extends HTMLElement {
               </div>
             </div>
             <div class="cwc-avg-row" id="cwc-avg">Avg -- • ↑ -- • ↓ --</div>
+            <div class="cwc-mold-summary" id="cwc-mold-summary" style="display:none;"></div>
           </div>
         </div>
         <div class="cwc-sun-row">
@@ -391,6 +393,7 @@ class CasaWeatherCard extends HTMLElement {
     this._dewRow = this.shadowRoot.querySelector("#cwc-dew-row");
     this._dewEl = this.shadowRoot.querySelector("#cwc-dew");
     this._avgEl = this.shadowRoot.querySelector("#cwc-avg");
+    this._moldSummaryEl = this.shadowRoot.querySelector("#cwc-mold-summary");
     this._roomsRow = this.shadowRoot.querySelector("#cwc-rooms-row");
     this._condensaRow = this.shadowRoot.querySelector("#cwc-condensa-row");
     this._rainBadge = this.shadowRoot.querySelector("#cwc-rain-badge");
@@ -647,15 +650,31 @@ class CasaWeatherCard extends HTMLElement {
           .join("");
       }
 
-      // Riepilogo condensa: badge Sì/No + elenco stanze a rischio + punti di rugiada
-      if (this._condensaRow) {
+      // Badge riepilogo rischio condensa: mostrato subito sotto Avg/Max/Min.
+      if (this._moldSummaryEl) {
         const roomsWithMold = rooms.filter((r) => r.mold != null);
         const atRisk = roomsWithMold.filter((r) => r.mold !== "OK").map((r) => r.name);
         const hasRisk = atRisk.length > 0;
 
+        if (roomsWithMold.length === 0) {
+          this._moldSummaryEl.style.display = "none";
+        } else {
+          this._moldSummaryEl.style.display = "flex";
+          this._moldSummaryEl.innerHTML = `
+            <span class="cwc-mold-pill" style="background:${
+              hasRisk ? "#e5393522" : "#43a04722"
+            };color:${hasRisk ? "#e53935" : "#43a047"};">
+              Rischio condensa: ${hasRisk ? "Sì — " + atRisk.join(", ") : "No"}
+            </span>
+          `;
+        }
+      }
+
+      // Punti di rugiada per stanza: resta in fondo alla card.
+      if (this._condensaRow) {
         const roomsWithDew = rooms.filter((r) => r.dew != null);
 
-        if (roomsWithMold.length === 0 && roomsWithDew.length === 0) {
+        if (roomsWithDew.length === 0) {
           this._condensaRow.style.display = "none";
         } else {
           this._condensaRow.style.display = "flex";
@@ -668,25 +687,10 @@ class CasaWeatherCard extends HTMLElement {
             })
             .join("");
           this._condensaRow.innerHTML = `
-            ${
-              roomsWithMold.length > 0
-                ? `<div class="cwc-mold-summary">
-                    <span class="cwc-mold-pill" style="background:${
-                      hasRisk ? "#e5393522" : "#43a04722"
-                    };color:${hasRisk ? "#e53935" : "#43a047"};">
-                      Rischio condensa: ${hasRisk ? "Sì — " + atRisk.join(", ") : "No"}
-                    </span>
-                  </div>`
-                : ""
-            }
-            ${
-              dewChips
-                ? `<div class="cwc-dew-block">
-                    <div class="cwc-dew-title">Punto di rugiada</div>
-                    <div class="cwc-dew-summary">${dewChips}</div>
-                  </div>`
-                : ""
-            }
+            <div class="cwc-dew-block">
+              <div class="cwc-dew-title">Punto di rugiada</div>
+              <div class="cwc-dew-summary">${dewChips}</div>
+            </div>
           `;
         }
       }
